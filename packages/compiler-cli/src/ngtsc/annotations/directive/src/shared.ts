@@ -11,20 +11,23 @@ import ts from 'typescript';
 
 import {ErrorCode, FatalDiagnosticError, makeRelatedInformation} from '../../../diagnostics';
 import {assertSuccessfulReferenceEmit, ImportFlags, Reference, ReferenceEmitter} from '../../../imports';
-import {ClassPropertyMapping, DecoratorInputTransform, HostDirectiveMeta, InputMapping, isHostDirectiveMetaForGlobalMode} from '../../../metadata';
+import {ClassPropertyMapping, DecoratorInputTransform, HostDirectiveMeta, InputMapping, InputOrOutput, isHostDirectiveMetaForGlobalMode} from '../../../metadata';
 import {DynamicValue, EnumValue, PartialEvaluator, ResolvedValue, traceDynamicValue} from '../../../partial_evaluator';
 import {AmbientImport, ClassDeclaration, ClassMember, ClassMemberKind, Decorator, filterToMembersWithDecorator, isNamedClassDeclaration, ReflectionHost, reflectObjectLiteral} from '../../../reflection';
 import {CompilationMode} from '../../../transform';
-import {createSourceSpan, createValueHasWrongTypeError, forwardRefResolver, getAngularDecorators, getConstructorDependencies, isAngularDecorator, ReferencesRegistry, toR3Reference, tryUnwrapForwardRef, unwrapConstructorDependencies, unwrapExpression, validateConstructorDependencies, wrapFunctionExpressionsInParens, wrapTypeReference} from '../../common';
+import {createSourceSpan, createValueHasWrongTypeError, forwardRefResolver, getAngularDecorators, getConstructorDependencies, isAngularDecorator, ReferencesRegistry, toR3Reference, tryUnwrapForwardRef, unwrapConstructorDependencies, unwrapExpression, validateConstructorDependencies, assertLocalCompilationUnresolvedConst, wrapFunctionExpressionsInParens, wrapTypeReference} from '../../common';
 
 import {tryParseSignalInputMapping} from './input_function';
+import {tryParseSignalModelMapping} from './model_function';
+import {tryParseInitializerBasedOutput} from './output_function';
 import {tryParseSignalQueryFromInitializer} from './query_functions';
 
 const EMPTY_OBJECT: {[key: string]: string} = {};
 
 type QueryDecoratorName = 'ViewChild'|'ViewChildren'|'ContentChild'|'ContentChildren';
-const queryDecoratorNames: QueryDecoratorName[] =
+export const queryDecoratorNames: QueryDecoratorName[] =
     ['ViewChild', 'ViewChildren', 'ContentChild', 'ContentChildren'];
+
 const QUERY_TYPES = new Set<string>(queryDecoratorNames);
 
 /**
@@ -87,8 +90,8 @@ export function extractDirectiveMetadata(
 
   // And outputs.
   const outputsFromMeta = parseOutputsArray(directive, evaluator);
-  const outputsFromFields = parseOutputFields(
-      filterToMembersWithDecorator(decoratedElements, 'Output', coreModule), evaluator);
+  const outputsFromFields =
+      parseOutputFields(clazz, decorator, members, isCore, reflector, evaluator, outputsFromMeta);
   const outputs = ClassPropertyMapping.fromMappedObject({...outputsFromMeta, ...outputsFromFields});
 
   // Parse queries of fields.
@@ -122,6 +125,12 @@ export function extractDirectiveMetadata(
   if (directive.has('selector')) {
     const expr = directive.get('selector')!;
     const resolved = evaluator.evaluate(expr);
+    assertLocalCompilationUnresolvedConst(compilationMode, resolved, null,
+      'Unresolved identifier found for @Component.selector field! Did you ' + 
+      'import this identifier from a file outside of the compilation unit? ' + 
+      'This is not allowed when Angular compiler runs in local mode. Possible ' + 
+      'solutions: 1) Move the declarations into a file within the compilation ' + 
+      'unit, 2) Inline the selector');
     if (typeof resolved !== 'string') {
       throw createValueHasWrongTypeError(expr, resolved, `selector must be a string`);
     }
@@ -134,7 +143,7 @@ export function extractDirectiveMetadata(
     }
   }
 
-  const host = extractHostBindings(decoratedElements, evaluator, coreModule, directive);
+  const host = extractHostBindings(decoratedElements, evaluator, coreModule, compilationMode, directive);
 
   const providers: Expression|null = directive.has('providers') ?
       new WrappedNodeExpr(
@@ -153,6 +162,14 @@ export function extractDirectiveMetadata(
   if (directive.has('exportAs')) {
     const expr = directive.get('exportAs')!;
     const resolved = evaluator.evaluate(expr);
+
+    assertLocalCompilationUnresolvedConst(compilationMode, resolved, null, 
+      'Unresolved identifier found for exportAs field! Did you import this ' + 
+      'identifier from a file outside of the compilation unit? This is not ' + 
+      'allowed when Angular compiler runs in local mode. Possible solutions: ' + 
+      '1) Move the declarations into a file within the compilation unit, ' + 
+      '2) Inline the selector');
+
     if (typeof resolved !== 'string') {
       throw createValueHasWrongTypeError(expr, resolved, `exportAs must be a string`);
     }
@@ -354,8 +371,7 @@ export function extractDecoratorQueryMetadata(
 
 
 export function extractHostBindings(
-    members: ClassMember[], evaluator: PartialEvaluator, coreModule: string|undefined,
-    metadata?: Map<string, ts.Expression>): ParsedHostBindings {
+    members: ClassMember[], evaluator: PartialEvaluator, coreModule: string|undefined, compilationMode: CompilationMode, metadata?: Map<string, ts.Expression>): ParsedHostBindings {
   let bindings: ParsedHostBindings;
   if (metadata && metadata.has('host')) {
     bindings = evaluateHostExpressionBindings(metadata.get('host')!, evaluator);
@@ -376,6 +392,14 @@ export function extractHostBindings(
             }
 
             const resolved = evaluator.evaluate(decorator.args[0]);
+
+            // Specific error for local compilation mode if the argument cannot be resolved
+            assertLocalCompilationUnresolvedConst(compilationMode, resolved, null, 
+              'Unresolved identifier found for @HostBinding\'s argument! Did ' + 
+              'you import this identifier from a file outside of the compilation ' + 
+              'unit? This is not allowed when Angular compiler runs in local mode. ' + 'Possible solutions: 1) Move the declaration into a file within ' + 
+              'the compilation unit, 2) Inline the argument');
+
             if (typeof resolved !== 'string') {
               throw createValueHasWrongTypeError(
                   decorator.node, resolved, `@HostBinding's argument must be a string`);
@@ -405,6 +429,15 @@ export function extractHostBindings(
             }
 
             const resolved = evaluator.evaluate(decorator.args[0]);
+
+            // Specific error for local compilation mode if the event name cannot be resolved
+            assertLocalCompilationUnresolvedConst(compilationMode, resolved, null, 
+              'Unresolved identifier found for @HostListener\'s event name ' + 
+              'argument! Did you import this identifier from a file outside of ' + 
+              'the compilation unit? This is not allowed when Angular compiler ' + 
+              'runs in local mode. Possible solutions: 1) Move the declaration ' + 
+              'into a file within the compilation unit, 2) Inline the argument');
+
             if (typeof resolved !== 'string') {
               throw createValueHasWrongTypeError(
                   decorator.args[0], resolved,
@@ -491,24 +524,26 @@ export function parseDirectiveStyles(
   const evaluated = evaluator.evaluate(expression);
   const value = typeof evaluated === 'string' ? [evaluated] : evaluated;
 
-  // Create specific error if any string is imported from external file in local compilation mode
-  if (compilationMode === CompilationMode.LOCAL && Array.isArray(value)) {
-    for (const entry of value) {
-      if (entry instanceof DynamicValue && entry.isFromUnknownIdentifier()) {
-        const relatedInformation = traceDynamicValue(expression, entry);
-
-        const chain: ts.DiagnosticMessageChain = {
-          messageText: `Unknown identifier used as styles string: ${
-              entry.node
-                  .getText()} (did you import this string from another file? This is not allowed in local compilation mode. Please either inline it or move it to a separate file and include it using 'styleUrl')`,
-          category: ts.DiagnosticCategory.Error,
-          code: 0,
-        };
-
-        throw new FatalDiagnosticError(
-            ErrorCode.LOCAL_COMPILATION_IMPORTED_STYLES_STRING, expression, chain,
-            relatedInformation);
-      }
+  // Check if the identifier used for @Component.styles cannot be resolved in local compilation mode. if the case, an error specific to this situation is generated.
+  if (compilationMode === CompilationMode.LOCAL) {
+    let unresolvedNode: ts.Node|null = null;
+    if (Array.isArray(value)) {
+      const entry = value.find(e => e instanceof DynamicValue && e.isFromUnknownIdentifier()) as DynamicValue|undefined;
+      unresolvedNode = entry?.node ?? null;
+    } else if (value instanceof DynamicValue && value.isFromUnknownIdentifier()) {
+      unresolvedNode = value.node;
+    }
+    
+    if (unresolvedNode !== null) {
+      throw new FatalDiagnosticError(
+          ErrorCode.LOCAL_COMPILATION_UNRESOLVED_CONST, 
+          unresolvedNode, 
+          'Unresolved identifier found for @Component.styles field! Did you import ' + 
+          'this identifier from a file outside of the compilation unit? This is ' + 
+          'not allowed when Angular compiler runs in local mode. Possible ' + 
+          'solutions: 1) Move the declarations into a file within the compilation ' + 
+          'unit, 2) Inline the styles, 3) Move the styles into separate files and ' + 
+          'include it using @Component.styleUrls');
     }
   }
 
@@ -621,32 +656,6 @@ function parseMappingString(value: string): [bindingPropertyName: string, fieldN
   return [bindingPropertyName ?? fieldName, fieldName];
 }
 
-/**
- * Parse property decorators (e.g. `Input` or `Output`) and invoke callback with the parsed data.
- */
-function parseDecoratedFields(
-    fields: {member: ClassMember, decorators: Decorator[]}[], evaluator: PartialEvaluator,
-    callback: (fieldName: string, fieldValue: ResolvedValue, decorator: Decorator) => void): void {
-  for (const field of fields) {
-    const fieldName = field.member.name;
-
-    for (const decorator of field.decorators) {
-      if (decorator.args != null && decorator.args.length > 1) {
-        throw new FatalDiagnosticError(
-            ErrorCode.DECORATOR_ARITY_WRONG, decorator.node,
-            `@${decorator.name} can have at most one argument, got ${
-                decorator.args.length} argument(s)`);
-      }
-
-      const value = decorator.args != null && decorator.args.length > 0 ?
-          evaluator.evaluate(decorator.args[0]) :
-          null;
-
-      callback(fieldName, value, decorator);
-    }
-  }
-}
-
 /** Parses the `inputs` array of a directive/component decorator. */
 function parseInputsArray(
     clazz: ClassDeclaration, decoratorMetadata: Map<string, ts.Expression>,
@@ -747,11 +756,18 @@ function tryParseInputFieldMapping(
 
   const decorator = tryGetDecoratorOnMember(member, 'Input', isCore);
   const signalInputMapping = tryParseSignalInputMapping(member, reflector, isCore);
+  const modelInputMapping = tryParseSignalModelMapping(member, reflector, isCore);
 
   if (decorator !== null && signalInputMapping !== null) {
     throw new FatalDiagnosticError(
         ErrorCode.INITIALIZER_API_WITH_DISALLOWED_DECORATOR, decorator.node,
         `Using @Input with a signal input is not allowed.`);
+  }
+
+  if (decorator !== null && modelInputMapping !== null) {
+    throw new FatalDiagnosticError(
+        ErrorCode.INITIALIZER_API_WITH_DISALLOWED_DECORATOR, decorator.node,
+        `Using @Input with a model input is not allowed.`);
   }
 
   // Check `@Input` case.
@@ -810,6 +826,10 @@ function tryParseInputFieldMapping(
   // Look for signal inputs. e.g. `memberName = input()`
   if (signalInputMapping !== null) {
     return signalInputMapping;
+  }
+
+  if (modelInputMapping !== null) {
+    return modelInputMapping.input;
   }
 
   return null;
@@ -1083,23 +1103,98 @@ function parseOutputsArray(
   return metaValues ? parseMappingStringArray(metaValues) : EMPTY_OBJECT;
 }
 
-/** Parses the class members that are decorated as outputs. */
+/** Parses the class members that are outputs. */
 function parseOutputFields(
-    outputMembers: {member: ClassMember, decorators: Decorator[]}[],
-    evaluator: PartialEvaluator): Record<string, string> {
+    clazz: ClassDeclaration, classDecorator: Decorator, members: ClassMember[], isCore: boolean,
+    reflector: ReflectionHost, evaluator: PartialEvaluator,
+    outputsFromMeta: Record<string, string>): Record<string, string> {
   const outputs = {} as Record<string, string>;
 
-  parseDecoratedFields(outputMembers, evaluator, (fieldName, bindingPropertyName, decorator) => {
-    if (bindingPropertyName != null && typeof bindingPropertyName !== 'string') {
-      throw createValueHasWrongTypeError(
-          decorator.node, bindingPropertyName,
-          `@${decorator.name} decorator argument must resolve to a string`);
+  for (const member of members) {
+    const decoratorOutput = tryParseDecoratorOutput(member, evaluator, isCore);
+    const initializerOutput = tryParseInitializerBasedOutput(member, reflector, isCore);
+    const modelMapping = tryParseSignalModelMapping(member, reflector, isCore);
+
+    if (decoratorOutput !== null && initializerOutput !== null) {
+      throw new FatalDiagnosticError(
+          ErrorCode.INITIALIZER_API_WITH_DISALLOWED_DECORATOR, decoratorOutput.decorator.node,
+          `Using "@Output" with "output()" is not allowed.`);
     }
 
-    outputs[fieldName] = bindingPropertyName ?? fieldName;
-  });
+    if (decoratorOutput !== null && modelMapping !== null) {
+      throw new FatalDiagnosticError(
+          ErrorCode.INITIALIZER_API_WITH_DISALLOWED_DECORATOR, decoratorOutput.decorator.node,
+          `Using @Output with a model input is not allowed.`);
+    }
+
+    const queryNode =
+        decoratorOutput?.decorator.node ?? initializerOutput?.call ?? modelMapping?.call;
+    if (queryNode !== undefined && member.isStatic) {
+      throw new FatalDiagnosticError(
+          ErrorCode.INCORRECTLY_DECLARED_ON_STATIC_MEMBER, queryNode,
+          `Output is incorrectly declared on a static class member.`);
+    }
+
+    let bindingPropertyName: string;
+
+    if (decoratorOutput !== null) {
+      bindingPropertyName = decoratorOutput.metadata.bindingPropertyName;
+    } else if (initializerOutput !== null) {
+      bindingPropertyName = initializerOutput.metadata.bindingPropertyName;
+    } else if (modelMapping !== null) {
+      bindingPropertyName = modelMapping.output.bindingPropertyName;
+    } else {
+      continue;
+    }
+
+    // Validate that initializer-based outputs are not accidentally declared
+    // in the `outputs` class metadata.
+    if (((initializerOutput !== null || modelMapping !== null) &&
+         outputsFromMeta.hasOwnProperty(member.name))) {
+      throw new FatalDiagnosticError(
+          ErrorCode.INITIALIZER_API_DECORATOR_METADATA_COLLISION, member.node ?? clazz,
+          `Output "${member.name}" is unexpectedly declared in @${classDecorator.name} as well.`);
+    }
+
+    outputs[member.name] = bindingPropertyName;
+  }
 
   return outputs;
+}
+
+/** Attempts to parse a decorator-based @Output. */
+function tryParseDecoratorOutput(member: ClassMember, evaluator: PartialEvaluator, isCore: boolean):
+    {decorator: Decorator, metadata: InputOrOutput}|null {
+  const decorator = tryGetDecoratorOnMember(member, 'Output', isCore);
+  if (decorator === null) {
+    return null;
+  }
+  if (decorator.args !== null && decorator.args.length > 1) {
+    throw new FatalDiagnosticError(
+        ErrorCode.DECORATOR_ARITY_WRONG, decorator.node,
+        `@Output can have at most one argument, got ${decorator.args.length} argument(s)`);
+  }
+
+  const classPropertyName = member.name;
+
+  let alias: string|null = null;
+  if (decorator.args?.length === 1) {
+    const resolvedAlias = evaluator.evaluate(decorator.args[0]);
+    if (typeof resolvedAlias !== 'string') {
+      throw createValueHasWrongTypeError(
+          decorator.node, resolvedAlias, `@Output decorator argument must resolve to a string`);
+    }
+    alias = resolvedAlias;
+  }
+
+  return {
+    decorator,
+    metadata: {
+      isSignal: false,
+      classPropertyName,
+      bindingPropertyName: alias ?? classPropertyName,
+    }
+  };
 }
 
 function evaluateHostExpressionBindings(
@@ -1187,8 +1282,8 @@ function extractHostDirectives(
       if (!ts.isIdentifier(hostReference.node) &&
           !ts.isPropertyAccessExpression(hostReference.node)) {
         throw new FatalDiagnosticError(
-            ErrorCode.LOCAL_COMPILATION_HOST_DIRECTIVE_INVALID, hostReference.node,
-            `In local compilation mode, host directive cannot be an expression`);
+            ErrorCode.LOCAL_COMPILATION_EXPRESSION_FOR_HOST_DIRECTIVE, hostReference.node,
+            `In local compilation mode, host directive cannot be an expression. Use an identifier instead`);
       }
 
       directive = new WrappedNodeExpr(hostReference.node);

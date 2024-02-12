@@ -45,6 +45,14 @@
     "picture": "alan-agius4.jpg",
     "bio": "Angular CLI Member, Loves TypeScript, Build Tools, Food, Beer & Coffee :)"
   },
+  "alejandrocuba": {
+    "name": "Alejandro Cuba Ruiz",
+    "picture": "alejandrocuba.jpg",
+    "twitter": "zorphdark",
+    "website": "https://alejandrocuba.com/",
+    "bio": "Alejandro is a Principal Software Engineer, co-organizer of the Angular Community Meetup, and a member of the ng-Champions program at ng-conf. As the host of the Angularidades podcast, he engages in conversations with front-end developers and visual designers from the Spanish-speaking community.",
+    "groups": ["GDE"]
+  },
   "alisaduncan": {
     "name": "Alisa Duncan",
     "picture": "alisaduncan.jpg",
@@ -1103,6 +1111,14 @@
     "twitter": "willmendesneto",
     "website": "https://willmendesneto.github.io",
     "bio": "GDE (Google Developer Expert) Angular and Web Technologies, GDG Salvador organizer, passionate about technology and active in communities with a focus on web development, including Angular, JavaScript, HTML5, CSS3, Workflow, web performance, security and Internet of things. Participates in events organization, speaker at conferences in Brazil and other countries and contributes to several open source projects.",
+    "groups": ["GDE"]
+  },
+  "xocomil": {
+    "name": "Jason Warner",
+    "picture": "jasonwarner.jpg",
+    "twitter": "xocomil_1",
+    "website": "https://github.com/xocomil",
+    "bio": "Jason is a Senior Staff Engineer, Google Developer Expert in Angular and mentor. He enjoys code and is particularly passionate about front-end and Angular. Jason enjoys streaming on Twitch and interacting with community members. He loves to help others to achieve their goals.",
     "groups": ["GDE"]
   },
   "yannickbaron": {

@@ -9,23 +9,31 @@
 import ts from 'typescript';
 
 import {TypeScriptReflectionHost} from '../src/ngtsc/reflection';
-import {getDownlevelDecoratorsTransform, getInputSignalsMetadataTransform} from '../src/transformers/jit_transforms';
+import {getDownlevelDecoratorsTransform, getInitializerApiJitTransform} from '../src/transformers/jit_transforms';
 
 import {MockAotContext, MockCompilerHost} from './mocks';
 
 const TEST_FILE_INPUT = '/test.ts';
 const TEST_FILE_OUTPUT = `/test.js`;
 
-describe('signal inputs metadata transform', () => {
+describe('signal queries metadata transform', () => {
   let host: MockCompilerHost;
   let context: MockAotContext;
 
   beforeEach(() => {
     context = new MockAotContext('/', {
       'core.d.ts': `
-        export declare const Directive: any;
-        export declare const Input: any;
-        export declare const input: any;
+        export declare const Component: any;
+
+        export declare const ViewChild: any;
+        export declare const ViewChildren: any;
+        export declare const ContentChild: any;
+        export declare const ContentChildren: any;
+
+        export declare const viewChild: any;
+        export declare const viewChildren: any;
+        export declare const contentChild: any;
+        export declare const contentChildren: any;
       `,
     });
     host = new MockCompilerHost(context);
@@ -52,7 +60,7 @@ describe('signal inputs metadata transform', () => {
     const reflectionHost = new TypeScriptReflectionHost(typeChecker);
     const transformers: ts.CustomTransformers = {
       before: [
-        getInputSignalsMetadataTransform(reflectionHost, /* isCore */ false),
+        getInitializerApiJitTransform(reflectionHost, /* isCore */ false),
       ]
     };
 
@@ -77,161 +85,164 @@ describe('signal inputs metadata transform', () => {
     return omitLeadingWhitespace(output!);
   }
 
-  it('should add `@Input` decorator for a signal input', () => {
+  it('should add `@ViewChild` decorator for a signal `viewChild`', () => {
     const result = transform(`
-      import {input, Directive} from '@angular/core';
+      import {viewChild, Component} from '@angular/core';
 
-      @Directive({})
+      @Component({})
       class MyDir {
-        someInput = input(0);
+        el = viewChild('el');
       }
     `);
 
     expect(result).toContain(omitLeadingWhitespace(`
       __decorate([
-        i0.Input({ isSignal: true, alias: "someInput", required: false, transform: undefined })
-        ], MyDir.prototype, "someInput", void 0);
+        i0.ViewChild('el', { isSignal: true })
+      ], MyDir.prototype, "el", void 0);
     `));
   });
 
-  it('should add `@Input` decorator for a required signal input', () => {
+  it('should add `@ViewChild` decorator for a required `viewChild`', () => {
     const result = transform(`
-      import {input, Directive} from '@angular/core';
+      import {viewChild, Component} from '@angular/core';
 
-      @Directive({})
+      @Component({})
       class MyDir {
-        someInput = input.required<string>();
+        el = viewChild.required('el');
       }
     `);
 
     expect(result).toContain(omitLeadingWhitespace(`
       __decorate([
-        i0.Input({ isSignal: true, alias: "someInput", required: true, transform: undefined })
-        ], MyDir.prototype, "someInput", void 0);
+        i0.ViewChild('el', { isSignal: true })
+      ], MyDir.prototype, "el", void 0);
     `));
   });
 
-  it('should add `@Input` decorator for signal inputs with alias options', () => {
+  it('should add `@ViewChild` decorator for `viewChild` with read option', () => {
     const result = transform(`
-      import {input, Directive} from '@angular/core';
+      import {viewChild, Component} from '@angular/core';
+      import * as bla from '@angular/core';
 
-      @Directive({})
+      const SomeToken = null!;
+
+      @Component({})
       class MyDir {
-        someInput = input(null, {alias: "public1"});
-        someInput2 = input.required<string>({alias: "public2"});
+        el = viewChild('el', {read: SomeToken});
+        el2 = viewChild('el', {read: bla.Component});
       }
     `);
 
     expect(result).toContain(omitLeadingWhitespace(`
       __decorate([
-        i0.Input({ isSignal: true, alias: "public1", required: false, transform: undefined })
-        ], MyDir.prototype, "someInput", void 0);
-      __decorate([
-        i0.Input({ isSignal: true, alias: "public2", required: true, transform: undefined })
-        ], MyDir.prototype, "someInput2", void 0);
+        i0.ViewChild('el', { ...{ read: SomeToken }, isSignal: true })
+        ], MyDir.prototype, "el", void 0);
     `));
-  });
-
-  it('should add `@Input` decorator for signal inputs with transforms', () => {
-    const result = transform(`
-      import {input, Directive} from '@angular/core';
-
-      @Directive({})
-      class MyDir {
-        someInput = input(0, {transform: v => v + 1});
-        someInput2 = input.required<number>({transform: v => v + 1});
-      }
-    `);
-
-    // Transform functions are never captured because the input signal already captures
-    // them and will run these independently of whether a `transform` is specified here.
     expect(result).toContain(omitLeadingWhitespace(`
       __decorate([
-        i0.Input({ isSignal: true, alias: "someInput", required: false, transform: undefined })
-        ], MyDir.prototype, "someInput", void 0);
-      __decorate([
-        i0.Input({ isSignal: true, alias: "someInput2", required: true, transform: undefined })
-        ], MyDir.prototype, "someInput2", void 0);
-    `));
+        i0.ViewChild('el', { ...{ read: bla.Component }, isSignal: true })
+        ], MyDir.prototype, "el2", void 0);
+  `));
   });
 
-  it('should not transform `@Input` decorator for non-signal inputs', () => {
+  it('should add `@ContentChild` decorator for signal queries with `descendants` option', () => {
     const result = transform(`
-      import {Input, input, Directive} from '@angular/core';
+      import {contentChild, Directive} from '@angular/core';
+
+      class X {}
 
       @Directive({})
       class MyDir {
-        someInput = input.required<string>({});
-        @Input({someOptionIndicatingThatNothingChanged: true}) nonSignalInput: number = 0;
+        el = contentChild(X, {descendants: true});
       }
     `);
 
     expect(result).toContain(omitLeadingWhitespace(`
       __decorate([
-        i0.Input({ isSignal: true, alias: "someInput", required: true, transform: undefined })
-        ], MyDir.prototype, "someInput", void 0);
-      __decorate([
-        Input({ someOptionIndicatingThatNothingChanged: true })
-        ], MyDir.prototype, "nonSignalInput", void 0);
+        i0.ContentChild(X, { ...{ descendants: true }, isSignal: true })
+      ], MyDir.prototype, "el", void 0);
     `));
   });
 
-  it('should not transform signal inputs with an existing `@Input` decorator', () => {
+  it('should not transform decorators for non-signal queries', () => {
+    const result = transform(`
+      import {ViewChildren, viewChild, Component} from '@angular/core';
+
+      @Component({})
+      class MyDir {
+        el = viewChild('el');
+        @ViewChild('el', {someOptionIndicatingThatNothingChanged: true}) nonSignalQuery: any = null;
+      }
+    `);
+
+    expect(result).toContain(omitLeadingWhitespace(`
+      __decorate([
+        i0.ViewChild('el', { isSignal: true })
+        ], MyDir.prototype, "el", void 0);
+      __decorate([
+        ViewChild('el', { someOptionIndicatingThatNothingChanged: true })
+        ], MyDir.prototype, "nonSignalQuery", void 0);
+    `));
+  });
+
+  it('should not transform signal queries with an existing decorator', () => {
     // This is expected to not happen because technically the TS code for signal inputs
-    // should never discover both `@Input` and signal inputs. We handle this gracefully
-    // though in case someone compiles without the Angular compiler (which would report a
+    // should never discover both decorators and a signal query declaration. We handle this
+    // gracefully though in case someone compiles without the Angular compiler (which would report a
     // diagnostic).
     const result = transform(`
-        import {Input, input, Directive} from '@angular/core';
+        import {contentChildren, ContentChildren, Directive} from '@angular/core';
 
         @Directive({})
         class MyDir {
-          @Input() someInput = input.required<string>({});
+          @ContentChildren('els', {isSignal: true}) els = contentChildren('els');
         }
       `);
 
     expect(result).toContain(omitLeadingWhitespace(`
-        __decorate([
-          Input()
-          ], MyDir.prototype, "someInput", void 0);
+      __decorate([
+        ContentChildren('els', { isSignal: true })
+        ], MyDir.prototype, "els", void 0);
       `));
   });
 
   it('should preserve existing decorators applied on signal inputs fields', () => {
     const result = transform(`
-        import {Input, input, Directive} from '@angular/core';
+        import {contentChild, Directive} from '@angular/core';
 
         declare const MyCustomDecorator: any;
 
         @Directive({})
         class MyDir {
-          @MyCustomDecorator() someInput = input.required<string>({});
+          @MyCustomDecorator() bla = contentChild('el', {descendants: false});
         }
       `);
 
     expect(result).toContain(omitLeadingWhitespace(`
       __decorate([
-        i0.Input({ isSignal: true, alias: "someInput", required: true, transform: undefined }),
+        i0.ContentChild('el', { ...{ descendants: false }, isSignal: true }),
         MyCustomDecorator()
-        ], MyDir.prototype, "someInput", void 0);
+        ], MyDir.prototype, "bla", void 0);
       `));
   });
 
   it('should work with decorator downleveling post-transform', () => {
     const result = transform(
         `
-      import {input, Directive} from '@angular/core';
+      import {viewChild, Component} from '@angular/core';
 
-      @Directive({})
+      class X {}
+
+      @Component({})
       class MyDir {
-        someInput = input(0);
+        el = viewChild('el', {read: X});
       }
     `,
         /* postDownlevelDecoratorsTransform */ true);
 
     expect(result).toContain(omitLeadingWhitespace(`
       static propDecorators = {
-        someInput: [{ type: i0.Input, args: [{ isSignal: true, alias: "someInput", required: false, transform: undefined },] }]
+        el: [{ type: i0.ViewChild, args: ['el', { ...{ read: X }, isSignal: true },] }]
       };
     `));
   });

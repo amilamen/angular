@@ -6,13 +6,13 @@
  * found in the LICENSE file at https://angular.io/license
  */
 
-import {InputSignalNode} from '../../authoring/input_signal_node';
+import {InputSignalNode} from '../../authoring/input/input_signal_node';
 import {OnChanges} from '../../interface/lifecycle_hooks';
 import {SimpleChange, SimpleChanges} from '../../interface/simple_change';
 import {assertString} from '../../util/assert';
 import {EMPTY_OBJ} from '../../util/empty';
 import {applyValueToInputField} from '../apply_value_input_field';
-import {DirectiveDef, DirectiveDefFeature, InputFlags} from '../interfaces/definition';
+import {DirectiveDef, DirectiveDefFeature} from '../interfaces/definition';
 
 /**
  * The NgOnChangesFeature decorates a component with support for the ngOnChanges

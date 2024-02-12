@@ -12,9 +12,11 @@
 //
 // no code actually imports these symbols from the @angular/core entry point
 export {
-  compileNgModuleFactory as ɵcompileNgModuleFactory,
   isBoundToModule as ɵisBoundToModule
 } from './application/application_ref';
+export {
+  compileNgModuleFactory as ɵcompileNgModuleFactory,
+} from './application/application_ngmodule_factory_compiler';
 export {
   injectChangeDetectorRef as ɵinjectChangeDetectorRef,
 } from './change_detection/change_detector_ref';
@@ -241,6 +243,9 @@ export {
   ɵɵtextInterpolateV,
   ɵɵviewQuery,
   ɵɵviewQuerySignal,
+  ɵɵtwoWayProperty,
+  ɵɵtwoWayBindingSet,
+  ɵɵtwoWayListener,
   ɵgetUnknownElementStrictMode,
   ɵsetUnknownElementStrictMode,
   ɵgetUnknownPropertyStrictMode,
@@ -317,6 +322,6 @@ export { AfterRenderEventManager as ɵAfterRenderEventManager, internalAfterNext
 export {depsTracker as ɵdepsTracker, USE_RUNTIME_DEPS_TRACKER_FOR_JIT as ɵUSE_RUNTIME_DEPS_TRACKER_FOR_JIT} from './render3/deps_tracker/deps_tracker';
 export {generateStandaloneInDeclarationsError as ɵgenerateStandaloneInDeclarationsError} from './render3/jit/module';
 export {getAsyncClassMetadataFn as ɵgetAsyncClassMetadataFn} from './render3/metadata';
-export {InputFlags as ɵɵInputFlags} from './render3/interfaces/definition';
+export {InputFlags as ɵɵInputFlags} from './render3/interfaces/input_flags';
 
 // clang-format on

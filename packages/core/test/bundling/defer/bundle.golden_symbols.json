@@ -198,7 +198,7 @@
     "name": "GenericBrowserDomAdapter"
   },
   {
-    "name": "INJECTOR2"
+    "name": "INJECTOR"
   },
   {
     "name": "INJECTOR_DEF_TYPES"
@@ -1026,6 +1026,9 @@
     "name": "init_application_module"
   },
   {
+    "name": "init_application_ngmodule_factory_compiler"
+  },
+  {
     "name": "init_application_ref"
   },
   {
@@ -1213,9 +1216,6 @@
   },
   {
     "name": "init_definition"
-  },
-  {
-    "name": "init_definition2"
   },
   {
     "name": "init_definition_factory"
@@ -1461,6 +1461,9 @@
     "name": "init_input"
   },
   {
+    "name": "init_input_flags"
+  },
+  {
     "name": "init_input_signal"
   },
   {
@@ -1554,6 +1557,15 @@
     "name": "init_misc_utils"
   },
   {
+    "name": "init_model"
+  },
+  {
+    "name": "init_model_signal"
+  },
+  {
+    "name": "init_model_signal_node"
+  },
+  {
     "name": "init_module"
   },
   {
@@ -1641,6 +1653,9 @@
     "name": "init_operators"
   },
   {
+    "name": "init_output"
+  },
+  {
     "name": "init_partial"
   },
   {
@@ -1702,6 +1717,9 @@
   },
   {
     "name": "init_queries"
+  },
+  {
+    "name": "init_queries2"
   },
   {
     "name": "init_queries_signals"
@@ -1858,6 +1876,9 @@
   },
   {
     "name": "init_trusted_types_bypass"
+  },
+  {
+    "name": "init_two_way"
   },
   {
     "name": "init_type"

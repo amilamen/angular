@@ -642,7 +642,7 @@ class TcbDirectiveCtorOp extends TcbOp {
           attr.attribute instanceof TmplAstTextAttribute) {
         continue;
       }
-      for (const {fieldName} of attr.inputs) {
+      for (const {fieldName, isTwoWayBinding} of attr.inputs) {
         // Skip the field if an attribute has already been bound to it; we can't have a duplicate
         // key in the type constructor call.
         if (genericInputs.has(fieldName)) {
@@ -656,6 +656,7 @@ class TcbDirectiveCtorOp extends TcbOp {
           field: fieldName,
           expression,
           sourceSpan: attr.attribute.sourceSpan,
+          isTwoWayBinding,
         });
       }
     }
@@ -711,7 +712,7 @@ class TcbDirectiveInputsOp extends TcbOp {
 
       let assignment: ts.Expression = wrapForDiagnostics(expr);
 
-      for (const {fieldName, required, transformType, isSignal} of attr.inputs) {
+      for (const {fieldName, required, transformType, isSignal, isTwoWayBinding} of attr.inputs) {
         let target: ts.LeftHandSideExpression;
 
         if (required) {
@@ -812,6 +813,12 @@ class TcbDirectiveInputsOp extends TcbOp {
         if (attr.attribute.keySpan !== undefined) {
           addParseSpanInfo(target, attr.attribute.keySpan);
         }
+
+        // Two-way bindings accept `T | WritableSignal<T>` so we have to unwrap the value.
+        if (isTwoWayBinding) {
+          assignment = unwrapWritableSignal(assignment, this.tcb);
+        }
+
         // Finally the assignment is extended by assigning it into the target expression.
         assignment =
             ts.factory.createBinaryExpression(target, ts.SyntaxKind.EqualsToken, assignment);
@@ -2292,7 +2299,8 @@ interface TcbBoundAttribute {
     fieldName: ClassPropertyName,
     required: boolean,
     isSignal: boolean,
-    transformType: Reference<ts.TypeNode>|null
+    transformType: Reference<ts.TypeNode>|null,
+    isTwoWayBinding: boolean,
   }[];
 }
 
@@ -2489,7 +2497,12 @@ function tcbCallTypeCtor(
 
     if (input.type === 'binding') {
       // For bound inputs, the property is assigned the binding expression.
-      const expr = widenBinding(input.expression, tcb);
+      let expr = widenBinding(input.expression, tcb);
+
+      if (input.isTwoWayBinding) {
+        expr = unwrapWritableSignal(expr, tcb);
+      }
+
       const assignment =
           ts.factory.createPropertyAssignment(propertyName, wrapForDiagnostics(expr));
       addParseSpanInfo(assignment, input.sourceSpan);
@@ -2527,12 +2540,16 @@ function getBoundAttributes(
     if (inputs !== null) {
       boundInputs.push({
         attribute: attr,
-        inputs: inputs.map(input => ({
-                             fieldName: input.classPropertyName,
-                             required: input.required,
-                             transformType: input.transform?.type || null,
-                             isSignal: input.isSignal,
-                           }))
+        inputs: inputs.map(input => {
+          return ({
+            fieldName: input.classPropertyName,
+            required: input.required,
+            transformType: input.transform?.type || null,
+            isSignal: input.isSignal,
+            isTwoWayBinding:
+                attr instanceof TmplAstBoundAttribute && attr.type === BindingType.TwoWay,
+          });
+        })
       });
     }
   };
@@ -2586,6 +2603,15 @@ function widenBinding(expr: ts.Expression, tcb: Context): ts.Expression {
 }
 
 /**
+ * Wraps an expression in an `unwrapSignal` call which extracts the signal's value.
+ */
+function unwrapWritableSignal(expression: ts.Expression, tcb: Context): ts.CallExpression {
+  const unwrapRef = tcb.env.referenceExternalSymbol(
+      R3Identifiers.unwrapWritableSignal.moduleName, R3Identifiers.unwrapWritableSignal.name);
+  return ts.factory.createCallExpression(unwrapRef, undefined, [expression]);
+}
+
+/**
  * An input binding that corresponds with a field of a directive.
  */
 interface TcbDirectiveBoundInput {
@@ -2605,6 +2631,11 @@ interface TcbDirectiveBoundInput {
    * The source span of the full attribute binding.
    */
   sourceSpan: ParseSourceSpan;
+
+  /**
+   * Whether the binding is part of a two-way binding.
+   */
+  isTwoWayBinding: boolean;
 }
 
 /**

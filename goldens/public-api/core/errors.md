@@ -123,6 +123,10 @@ export const enum RuntimeErrorCode {
     // (undocumented)
     REQUIRED_INPUT_NO_VALUE = -950,
     // (undocumented)
+    REQUIRED_MODEL_NO_VALUE = -952,
+    // (undocumented)
+    REQUIRED_QUERY_NO_VALUE = -951,
+    // (undocumented)
     RUNTIME_DEPS_INVALID_IMPORTED_TYPE = 1000,
     // (undocumented)
     RUNTIME_DEPS_ORPHAN_COMPONENT = 1001,

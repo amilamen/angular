@@ -648,6 +648,88 @@ describe('type check blocks', () => {
     expect(block).toContain('((((this).foo)).$any(((this).a)))');
   });
 
+  it('should handle a two-way binding to an input/output pair', () => {
+    const TEMPLATE = `<div twoWay [(input)]="value"></div>`;
+    const DIRECTIVES: TestDeclaration[] = [{
+      type: 'directive',
+      name: 'TwoWay',
+      selector: '[twoWay]',
+      inputs: {input: 'input'},
+      outputs: {inputChange: 'inputChange'},
+    }];
+    const block = tcb(TEMPLATE, DIRECTIVES);
+    expect(block).toContain('var _t1 = null! as i0.TwoWay;');
+    expect(block).toContain('_t1.input = i1.ɵunwrapWritableSignal((((this).value)));');
+  });
+
+  it('should handle a two-way binding to an input/output pair of a generic directive', () => {
+    const TEMPLATE = `<div twoWay [(input)]="value"></div>`;
+    const DIRECTIVES: TestDeclaration[] = [{
+      type: 'directive',
+      name: 'TwoWay',
+      selector: '[twoWay]',
+      inputs: {input: 'input'},
+      outputs: {inputChange: 'inputChange'},
+      isGeneric: true,
+    }];
+    const block = tcb(TEMPLATE, DIRECTIVES);
+    expect(block).toContain('const _ctor1: <T extends string = any>(init: Pick<i0.TwoWay<T>, "input">) => i0.TwoWay<T> = null!');
+    expect(block).toContain('var _t1 = _ctor1({ "input": (i1.ɵunwrapWritableSignal(((this).value))) });');
+    expect(block).toContain('_t1.input = i1.ɵunwrapWritableSignal((((this).value)));');
+  });
+
+  it('should handle a two-way binding to a model()', () => {
+    const TEMPLATE = `<div twoWay [(input)]="value"></div>`;
+    const DIRECTIVES: TestDeclaration[] = [{
+      type: 'directive',
+      name: 'TwoWay',
+      selector: '[twoWay]',
+      inputs: {
+        input: {
+          classPropertyName: 'input',
+          bindingPropertyName: 'input',
+          required: false,
+          isSignal: true,
+          transform: null,
+        }
+      },
+      outputs: {inputChange: 'inputChange'},
+    }];
+    const block = tcb(TEMPLATE, DIRECTIVES);
+    expect(block).toContain('var _t1 = null! as i0.TwoWay;');
+    expect(block).toContain('_t1.input[i1.ɵINPUT_SIGNAL_BRAND_WRITE_TYPE] = i1.ɵunwrapWritableSignal((((this).value)));');
+  });
+
+  it('should handle a two-way binding to an input with a transform', () => {
+    const TEMPLATE = `<div twoWay [(input)]="value"></div>`;
+    const DIRECTIVES: TestDeclaration[] = [{
+      type: 'directive',
+      name: 'TwoWay',
+      selector: '[twoWay]',
+      inputs: {
+        input: {
+          classPropertyName: 'input',
+          bindingPropertyName: 'input',
+          required: false,
+          isSignal: false,
+          transform: {
+            node: ts.factory.createFunctionDeclaration(
+                undefined, undefined, undefined, undefined, [], undefined, undefined),
+            type: new Reference(ts.factory.createUnionTypeNode([
+              ts.factory.createKeywordTypeNode(ts.SyntaxKind.BooleanKeyword),
+              ts.factory.createKeywordTypeNode(ts.SyntaxKind.StringKeyword),
+            ]))
+          },
+        }
+      },
+      outputs: {inputChange: 'inputChange'},
+      coercedInputFields: ['input'],
+    }];
+    const block = tcb(TEMPLATE, DIRECTIVES);
+    expect(block).toContain('var _t1 = null! as boolean | string;');
+    expect(block).toContain('_t1 = i1.ɵunwrapWritableSignal((((this).value)));');
+  });
+
   describe('experimental DOM checking via lib.dom.d.ts', () => {
     it('should translate unclaimed bindings to their property equivalent', () => {
       const TEMPLATE = `<label [for]="'test'"></label>`;

@@ -255,7 +255,7 @@
     "name": "INITIAL_VALUE"
   },
   {
-    "name": "INJECTOR2"
+    "name": "INJECTOR"
   },
   {
     "name": "INJECTOR_DEF_TYPES"
@@ -1356,6 +1356,9 @@
     "name": "getPromiseCtor"
   },
   {
+    "name": "getQueryResults"
+  },
+  {
     "name": "getSanitizer"
   },
   {
@@ -1980,7 +1983,7 @@
     "name": "tap"
   },
   {
-    "name": "throwError2"
+    "name": "throwError"
   },
   {
     "name": "throwIfEmpty"
@@ -2098,9 +2101,6 @@
   },
   {
     "name": "ɵɵlistener"
-  },
-  {
-    "name": "ɵɵqueryRefresh"
   },
   {
     "name": "ɵɵsanitizeResourceUrl"

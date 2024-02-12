@@ -18,8 +18,9 @@ import {initNgDevMode} from '../util/ng_dev_mode';
 import {stringify} from '../util/stringify';
 
 import {NG_COMP_DEF, NG_DIR_DEF, NG_MOD_DEF, NG_PIPE_DEF} from './fields';
-import {ComponentDef, ComponentDefFeature, ComponentTemplate, ContentQueriesFunction, DependencyTypeList, DirectiveDef, DirectiveDefFeature, DirectiveDefListOrFactory, HostBindingsFunction, InputFlags, InputTransformFunction, PipeDef, PipeDefListOrFactory, TypeOrFactory, ViewQueriesFunction} from './interfaces/definition';
-import {TAttributes, TConstantsOrFactory} from './interfaces/node';
+import type {ComponentDef, ComponentDefFeature, ComponentTemplate, ContentQueriesFunction, DependencyTypeList, DirectiveDef, DirectiveDefFeature, DirectiveDefListOrFactory, HostBindingsFunction, InputTransformFunction, PipeDef, PipeDefListOrFactory, TypeOrFactory, ViewQueriesFunction} from './interfaces/definition';
+import { InputFlags } from './interfaces/input_flags';
+import type {TAttributes, TConstantsOrFactory} from './interfaces/node';
 import {CssSelectorList} from './interfaces/projection';
 import {stringifyCSSSelectorList} from './node_selector_matcher';
 
@@ -79,9 +80,7 @@ import {stringifyCSSSelectorList} from './node_selector_matcher';
  *  - Because declared and public name are usually same we only generate the array
  *    `['declared', 'public']` format when they differ, or there is a transform.
  *  - The reason why this API and `outputs` API is not the same is that `NgOnChanges` has
- *    inconsistent behavior in that it uses declared names rather than minified or public. For
- *    this reason `NgOnChanges` will be deprecated and removed in future version and this
- *    API will be simplified to be consistent with `output`.
+ *    inconsistent behavior in that it uses declared names rather than minified or public. 
  */
 type DirectiveInputs<T> = {
   [P in keyof T]?:
